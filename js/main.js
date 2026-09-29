@@ -38,7 +38,7 @@ let car = null;
 
 const app = {
   params: null,
-  styleKey: 'road',
+  styleKey: 'studio',
 
   setStyle(key) {
     if (!STYLES[key]) return;
