@@ -2,6 +2,8 @@
 
 Create and export customizable low poly 3D cars in your browser.
 
+![Low poly car in Clean Studio](screenshots/preview.png)
+
 **Live generator:** https://3d.mediageni.com/low-poly-car-generator/
 
 Run locally with a static web server from this directory, then open its local URL in a browser. For example:
