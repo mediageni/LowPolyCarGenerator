@@ -1,0 +1,121 @@
+// DOM control panel. Builds itself, then drives the app through its methods.
+// app.sync() is wired here so randomize/archetype changes refresh every control.
+
+import { ARCHETYPES, ARCHETYPE_KEYS, SLIDERS, getDerived } from './params.js';
+import { STYLES, STYLE_KEYS } from './styles.js';
+import { seedToString } from './rng.js';
+
+const el = (tag, cls, txt) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (txt != null) e.textContent = txt;
+  return e;
+};
+
+export function createUI(app) {
+  const panel = el('aside', 'panel');
+
+  // header
+  const head = el('div', 'head');
+  head.append(el('h1', null, 'LOW-POLY CAR GENERATOR'));
+  const seed = el('div', 'seed');
+  head.append(seed);
+  panel.append(head);
+
+  // dice
+  const dice = el('button', 'dice', '🎲  Generate new car');
+  dice.onclick = () => app.reroll();
+  panel.append(dice);
+
+  // archetype
+  panel.append(el('label', 'group-label', 'Body type'));
+  const typeRow = el('div', 'chips');
+  const typeBtns = {};
+  for (const k of ARCHETYPE_KEYS) {
+    const b = el('button', 'chip', ARCHETYPES[k].label);
+    b.onclick = () => app.setArchetype(k);
+    typeBtns[k] = b; typeRow.append(b);
+  }
+  panel.append(typeRow);
+
+  // style
+  panel.append(el('label', 'group-label', 'Look'));
+  const styleRow = el('div', 'chips');
+  const styleBtns = {};
+  for (const k of STYLE_KEYS) {
+    const b = el('button', 'chip', STYLES[k].label);
+    b.onclick = () => app.setStyle(k);
+    styleBtns[k] = b; styleRow.append(b);
+  }
+  panel.append(styleRow);
+
+  // sliders
+  panel.append(el('label', 'group-label', 'Shape'));
+  const sliders = {};
+  for (const s of SLIDERS) {
+    const row = el('div', 'slider');
+    const lab = el('span', 'sl-label', s.label);
+    const val = el('span', 'sl-val');
+    const top = el('div', 'sl-top'); top.append(lab, val);
+    const input = el('input');
+    input.type = 'range'; input.min = s.min; input.max = s.max; input.step = s.step;
+    input.oninput = () => { app.setSlider(s.key, parseFloat(input.value)); };
+    row.append(top, input);
+    sliders[s.key] = { input, val };
+    panel.append(row);
+  }
+
+  // colour
+  panel.append(el('label', 'group-label', 'Paint'));
+  const hueRow = el('div', 'slider');
+  const swatch = el('span', 'swatch');
+  const hTop = el('div', 'sl-top'); hTop.append(el('span', 'sl-label', 'Hue'), swatch);
+  const hue = el('input');
+  hue.type = 'range'; hue.min = 0; hue.max = 1; hue.step = 0.005;
+  hue.oninput = () => app.setHue(parseFloat(hue.value));
+  hueRow.append(hTop, hue);
+  panel.append(hueRow);
+
+  // export / share
+  const actions = el('div', 'actions');
+  const glb = el('button', 'act', '↓ GLB');
+  const obj = el('button', 'act', '↓ OBJ');
+  const share = el('button', 'act', '🔗 Share');
+  glb.onclick = () => app.exportGLB();
+  obj.onclick = () => app.exportOBJ();
+  share.onclick = async () => {
+    try { await navigator.clipboard.writeText(app.shareURL()); flash(share, 'Copied!'); }
+    catch { history.replaceState(null, '', app.shareURL()); flash(share, 'In URL bar'); }
+  };
+  actions.append(glb, obj, share);
+  panel.append(actions);
+
+  panel.append(el('div', 'hint', 'Drag to rotate · scroll to zoom'));
+
+  document.body.append(panel);
+
+  // collapse toggle (mobile)
+  const toggle = el('button', 'collapse', '⚙');
+  toggle.onclick = () => panel.classList.toggle('hidden');
+  document.body.append(toggle);
+
+  function flash(btn, msg) {
+    const old = btn.textContent;
+    btn.textContent = msg; btn.classList.add('ok');
+    setTimeout(() => { btn.textContent = old; btn.classList.remove('ok'); }, 1100);
+  }
+
+  // refresh every control from current state
+  app.sync = function () {
+    const p = app.params;
+    seed.textContent = '#' + seedToString(p.seed);
+    for (const k of ARCHETYPE_KEYS) typeBtns[k].classList.toggle('on', k === p.archetype);
+    for (const k of STYLE_KEYS) styleBtns[k].classList.toggle('on', k === app.styleKey);
+    for (const s of SLIDERS) {
+      const v = getDerived(p, s.key);
+      if (v != null) { sliders[s.key].input.value = v; sliders[s.key].val.textContent = (+v).toFixed(2); }
+    }
+    hue.value = p.color.h;
+    swatch.style.background = `hsl(${p.color.h * 360} ${p.color.s * 100}% ${p.color.l * 100}%)`;
+  };
+}
