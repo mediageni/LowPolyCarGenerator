@@ -8,13 +8,14 @@ import {
 } from "./params.js";
 import { STYLES } from "./styles.js";
 import { schemaFromSamples } from "@engine/state.js";
+import { enrichCar, CAR_SCHEMA, CAR_OPTIONS } from "./details.js";
 const samples = Object.keys(ARCHETYPES).flatMap((key) =>
   [0, 1, 42, 12345, 4294967295].map((seed) => paramsFromSeed(seed, key)),
 );
 export const adapter = {
   id: "car",
   path: "low-poly-car-generator",
-  label: "Low Poly Car",
+  label: "Car",
   noun: "car",
   filePrefix: "lowpoly",
   defaultLook: "studio",
@@ -27,15 +28,18 @@ export const adapter = {
   paramsFromSeed,
   getDerived,
   setDerived,
-  schema: schemaFromSamples(samples, SLIDERS),
+  schema: schemaFromSamples(samples, SLIDERS, CAR_SCHEMA),
+  enrich: enrichCar,
+  legacyConfig: (params) => params?.detailVersion === undefined,
+  options: CAR_OPTIONS,
+  optionsLabel: "Design & parts",
   build: buildCar,
   materials: (style, params) => style.materials(params.color),
   paletteSlots: {
     body: "body",
     trim: "trim",
     glass: "glass",
-    wheel: "roof",
-    rim: "accent",
+    hub: "accent",
   },
   camera: {
     fov: 42,

@@ -4,6 +4,7 @@
 // top+bottom chamfer idea); greenhouse, wheels and lights sit on top.
 
 import * as THREE from "three";
+import { addCarDetails } from "./details.js";
 import {
   stationProfile,
   crossSection,
@@ -163,6 +164,8 @@ function buildCabin(p, bodyMat, glassMat, edges) {
   quad(solid, tfl, tfr, trr, trl); // roof panel — always body-coloured
 
   const cabin = new THREE.Group();
+  cabin.name = "Cabin";
+  cabin.userData.profile = { bfl, bfr, brl, brr, tfl, tfr, trl, trr };
   cabin.add(meshFrom(glass, glassMat, edges));
   cabin.add(meshFrom(solid, bodyMat, edges));
   return cabin;
@@ -264,9 +267,20 @@ export function buildCar(p, mats) {
   const car = new THREE.Group();
   car.name = "car";
   car.add(buildBody(p, mats.body, mats.edges));
-  car.add(buildCabin(p, mats.body, mats.glass, mats.edges));
-  car.add(buildWheels(p, mats.tire, mats.hub));
-  car.add(buildLights(p, mats.lightFront, mats.lightRear));
+  const cabin = buildCabin(p, mats.body, mats.glass, mats.edges);
+  // Build the cabin only when enabled; detail positions reuse its actual profile.
+  if (p.cabinOn !== false) car.add(cabin);
+  if (p.wheelsOn !== false) car.add(buildWheels(p, mats.tire, mats.hub));
+  if (p.lightsOn !== false) {
+    const lights = buildLights(p, mats.lightFront, mats.lightRear);
+    lights.name = "Lights";
+    car.add(lights);
+  }
+  addCarDetails(car, p, mats, cabin);
+  if (p.cabinOn === false)
+    for (const child of cabin.children) {
+      child.traverse((node) => node.geometry?.dispose());
+    }
 
   const box = new THREE.Box3().setFromObject(car);
   const size = new THREE.Vector3(),
