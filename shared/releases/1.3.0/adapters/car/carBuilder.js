@@ -6,6 +6,7 @@
 import * as THREE from "three";
 import { addCarDetails } from "./details.js";
 import {
+  carShape,
   stationProfile,
   crossSection,
   halfWidthAtY,
@@ -48,6 +49,17 @@ function meshFrom(positions, material, edges) {
 function buildBody(p, mat, edges) {
   // Cross-sections from the shared loft math — the lights reuse the same profiles.
   const STATIONS = [0, 0.08, 0.22, 0.4, 0.6, 0.78, 0.92, 1];
+  if (p._physicalBody) {
+    for (const axle of [
+      (p.frontAxle * p.length) / 2,
+      (-p.rearAxle * p.length) / 2,
+    ])
+      for (let i = 0; i <= 14; i++) {
+        const x = axle + p._archRadius * Math.cos((Math.PI * i) / 14);
+        STATIONS.push(clamp(x / p.length + 0.5, 0.001, 0.999));
+      }
+    STATIONS.sort((a, b) => a - b);
+  }
   if (p.bed) {
     // extra ring pair at the cab's rear so the deck wall drops truly vertical
     STATIONS.push(
@@ -183,8 +195,12 @@ function buildWheels(p, tireMat, hubMat) {
     (p.track || 0);
   const xF = p.frontAxle * (p.length / 2);
   const xR = -p.rearAxle * (p.length / 2);
-  const tire = new THREE.CylinderGeometry(r, r, w, 16);
-  tire.rotateX(Math.PI / 2); // axis Y -> Z
+  const thickness = Math.min(w * 0.42, r * 0.32);
+  const tire = p._physicalBody
+    ? new THREE.TorusGeometry(r - thickness, thickness, 6, 20)
+    : new THREE.CylinderGeometry(r, r, w, 16);
+  if (p._physicalBody) tire.scale(1, 1, (w * 0.5) / thickness);
+  else tire.rotateX(Math.PI / 2); // axis Y -> Z
   const spoke = r * (p.spokeSize || 0.5); // xyz's spoke_size param
   const hub = new THREE.CylinderGeometry(spoke, spoke, w * 1.04, 10);
   hub.rotateX(Math.PI / 2);
@@ -264,9 +280,12 @@ function buildLights(p, frontMat, rearMat) {
 
 // mats: { body, glass, tire, hub, lightFront, lightRear, edges? }
 export function buildCar(p, mats) {
+  p = carShape(p);
   const car = new THREE.Group();
   car.name = "car";
-  car.add(buildBody(p, mats.body, mats.edges));
+  const body = buildBody(p, mats.body, mats.edges);
+  body.name = "Body";
+  car.add(body);
   const cabin = buildCabin(p, mats.body, mats.glass, mats.edges);
   // Build the cabin only when enabled; detail positions reuse its actual profile.
   if (p.cabinOn !== false) car.add(cabin);

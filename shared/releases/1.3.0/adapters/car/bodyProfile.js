@@ -6,6 +6,71 @@
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
+// Detailed interpretation keeps stored seeds/parameters intact. Archetype
+// proportions and physically necessary clearances are applied at build time.
+export function carShape(input) {
+  if (!(input.detailVersion > 0)) return input;
+  const p = { ...input, _physicalBody: true };
+  const shift = (rear, front) => {
+    p.cabinStart = clamp(input.cabinStart + rear, 0.065, 0.78);
+    p.cabinEnd = clamp(input.cabinEnd + front, p.cabinStart + 0.16, 0.97);
+  };
+  p._doors = ["sedan", "hatchback", "van", "cyber", "monster"].includes(
+    p.archetype,
+  )
+    ? 2
+    : 1;
+  switch (p.archetype) {
+    case "sedan":
+      shift(-0.1, 0.085);
+      p.windshieldRake = Math.min(input.windshieldRake, 0.23);
+      p.backlightRake = Math.min(input.backlightRake, 0.19);
+      p.cPillar = 0.06 + input.cPillar * 0.5;
+      break;
+    case "coupe":
+      shift(-0.055, 0.045);
+      p.roofHeight -= 0.045;
+      p.windshieldRake = Math.min(input.windshieldRake, 0.25);
+      p.backlightRake = Math.min(input.backlightRake, 0.34);
+      p.cPillar = 0.18 + input.cPillar * 0.5;
+      break;
+    case "hatchback":
+      shift(-0.21, 0.025);
+      p.backlightRake = Math.min(input.backlightRake, 0.08);
+      p.windshieldRake = Math.min(input.windshieldRake, 0.21);
+      break;
+    case "van":
+      shift(-0.16, -0.005);
+      p.cPillar = 0.61 + input.cPillar * 0.4;
+      p.backlightRake = 0.035;
+      break;
+    case "pickup":
+      shift(-0.025, 0.06);
+      p.backlightRake = Math.min(input.backlightRake, 0.1);
+      break;
+    case "sports":
+      shift(-0.02, 0.045);
+      p.windshieldRake = Math.min(input.windshieldRake, 0.28);
+      p.backlightRake = Math.min(input.backlightRake, 0.32);
+      p.cPillar = 0.12 + input.cPillar * 0.5;
+      break;
+    case "muscle":
+      shift(-0.045, 0.025);
+      p.windshieldRake = Math.min(input.windshieldRake, 0.24);
+      p.backlightRake = Math.min(input.backlightRake, 0.29);
+      break;
+    case "truck":
+      p.cPillar = 0.33 + input.cPillar * 0.5;
+      break;
+  }
+  p._archRadius = p.wheelRadius * 1.1;
+  const maxAxle = Math.max(0.3, 1 - ((p._archRadius + 0.13) * 2) / p.length);
+  p.frontAxle = Math.min(p.frontAxle, maxAxle);
+  p.rearAxle = Math.min(p.rearAxle, maxAxle);
+  p.roofHeight = Math.max(p.roofHeight, p.beltline + 0.18);
+  return p;
+}
+
 // The body's cross-section at station t: full width `halfW`, floor `yb`, top `yt`,
 // and the top/bottom chamfer insets (already clamped exactly like crossSection uses).
 export function stationProfile(p, t) {
@@ -35,8 +100,22 @@ export function stationProfile(p, t) {
     yt = lerp(belt, belt * p.bedDrop, ramp);
   }
   yt = Math.max(yt, floor + 0.06); // never let a drop/bed invert the section
+  let bodyFloor = floor;
+  if (p._physicalBody) {
+    const x = -L / 2 + t * L,
+      radius = p._archRadius;
+    for (const axle of [(p.frontAxle * L) / 2, (-p.rearAxle * L) / 2]) {
+      const dx = x - axle;
+      if (Math.abs(dx) < radius)
+        bodyFloor = Math.max(
+          bodyFloor,
+          p.wheelRadius + Math.sqrt(radius * radius - dx * dx),
+        );
+    }
+    yt = Math.max(yt, bodyFloor + 0.065);
+  }
   const sw = HW * wf,
-    sh = yt - floor;
+    sh = yt - bodyFloor;
   // variable-width top chamfer (xyz's one-step variable fillet): full width mid-body,
   // scaled by chamferTopB toward the tail and chamferTopF toward the nose.
   let ctw = p.chamferTop;
@@ -54,7 +133,16 @@ export function stationProfile(p, t) {
     0,
     sh * 0.7,
   );
-  return { x: -L / 2 + t * L, halfW: sw, yb: floor, yt, tcz, tcy, bcz, bcy };
+  return {
+    x: -L / 2 + t * L,
+    halfW: sw,
+    yb: bodyFloor,
+    yt,
+    tcz,
+    tcy,
+    bcz,
+    bcy,
+  };
 }
 
 // The chamfered-octagon outline for a profile -> 8 [z, y] points (Y-Z plane).
@@ -165,7 +253,19 @@ export function lightPlacements(p) {
       yt: pr.yt,
       fh,
       sl, // cap-plane data so the builder can shear quads onto it
-      sideLen: Math.min(0.22, run * 0.9),
+      sideLen: Math.min(
+        0.22,
+        run * 0.9,
+        p._physicalBody
+          ? Math.max(
+              0.015,
+              p.length / 2 -
+                ((front ? p.frontAxle : p.rearAxle) * p.length) / 2 -
+                p._archRadius -
+                0.035,
+            )
+          : Infinity,
+      ),
       yaw: clamp(Math.atan2(surf2 - surf, Math.max(1e-6, run)), 0, 0.9),
       tilt: Math.atan2(sl, fh),
       x: faceX + (front ? 1 : -1) * 0.005, // panel sits flush, a hair proud of the face
