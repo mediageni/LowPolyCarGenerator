@@ -19,6 +19,7 @@ export const adapter = {
   noun: "car",
   filePrefix: "lowpoly",
   defaultLook: "studio",
+  defaultFinish: "angular",
   defaultType: "cyber",
   colorKey: null,
   colorLabel: "Hue",
