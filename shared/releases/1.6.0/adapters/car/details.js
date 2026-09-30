@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { part, box, tube, ring, mergePart } from "@engine/geometry.js";
 import {
   detailOption,
@@ -315,6 +316,8 @@ function addCarStructure(root, p, mats) {
   mergePart(structure);
   if (p.trimOn) {
     const doors = part(root, "Door seams");
+    const body = root.getObjectByName("Body");
+    body.updateWorldMatrix(true, false);
     for (let i = 0; i <= p._doors; i++) {
       const t =
         p.cabinStart +
@@ -323,15 +326,33 @@ function addCarStructure(root, p, mats) {
         bottom = Math.max(profile.yb + 0.025, p.floor + 0.08),
         top = Math.max(bottom + 0.015, p.beltline * 0.96);
       if (top > profile.yt) continue;
-      for (const side of [-1, 1])
-        tube(
-          doors,
-          mats.tire,
-          [profile.x, bottom, side * (halfWidthAtY(profile, bottom) + 0.003)],
-          [profile.x, top, side * (halfWidthAtY(profile, top) + 0.003)],
-          p.length * 0.0012,
-          4,
-        );
+      for (const side of [-1, 1]) {
+        const points = [];
+        for (let j = 0; j <= 16; j++) {
+          const y = bottom + ((top - bottom) * j) / 16;
+          const hit = new THREE.Raycaster(
+            new THREE.Vector3(profile.x, y, side * p.halfWidth * 2),
+            new THREE.Vector3(0, 0, -side),
+          ).intersectObject(body, false)[0];
+          // Follow the actual triangulated panel, including chamfers. A single
+          // straight tube used to disappear into it and leave black end slivers.
+          if (hit)
+            points.push([
+              hit.point.x,
+              hit.point.y,
+              hit.point.z + side * p.length * 0.0006,
+            ]);
+        }
+        for (let j = 1; j < points.length; j++)
+          tube(
+            doors,
+            mats.tire,
+            points[j - 1],
+            points[j],
+            p.length * 0.00085,
+            4,
+          );
+      }
     }
     mergePart(doors);
   }

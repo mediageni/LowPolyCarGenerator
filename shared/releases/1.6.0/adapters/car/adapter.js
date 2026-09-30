@@ -20,6 +20,7 @@ export const adapter = {
   filePrefix: "lowpoly",
   defaultLook: "studio",
   defaultFinish: "angular",
+  defaultDetailVersion: 0,
   defaultType: "cyber",
   colorKey: null,
   colorLabel: "Hue",

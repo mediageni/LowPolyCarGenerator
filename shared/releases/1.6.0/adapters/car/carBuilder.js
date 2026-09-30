@@ -4,6 +4,7 @@
 // top+bottom chamfer idea); greenhouse, wheels and lights sit on top.
 
 import * as THREE from "three";
+import { shapeSegments } from "@engine/finish.js";
 import { addCarDetails } from "./details.js";
 import {
   carShape,
@@ -68,7 +69,10 @@ function buildBody(p, mat, edges) {
     );
     STATIONS.sort((a, b) => a - b);
   }
-  const rings = STATIONS.map((t) => {
+  const stations = p._physicalBody
+    ? STATIONS.filter((t, i) => !i || Math.abs(t - STATIONS[i - 1]) > 1e-9)
+    : STATIONS;
+  const rings = stations.map((t) => {
     const pr = stationProfile(p, t);
     return { pr, pts: crossSection(pr).map(([z, y]) => [pr.x, y, z]) };
   });
@@ -197,12 +201,22 @@ function buildWheels(p, tireMat, hubMat) {
   const xR = -p.rearAxle * (p.length / 2);
   const thickness = Math.min(w * 0.42, r * 0.32);
   const tire = p._physicalBody
-    ? new THREE.TorusGeometry(r - thickness, thickness, 6, 20)
-    : new THREE.CylinderGeometry(r, r, w, 16);
+    ? new THREE.TorusGeometry(
+        r - thickness,
+        thickness,
+        shapeSegments(6),
+        shapeSegments(20),
+      )
+    : new THREE.CylinderGeometry(r, r, w, shapeSegments(16));
   if (p._physicalBody) tire.scale(1, 1, (w * 0.5) / thickness);
   else tire.rotateX(Math.PI / 2); // axis Y -> Z
   const spoke = r * (p.spokeSize || 0.5); // xyz's spoke_size param
-  const hub = new THREE.CylinderGeometry(spoke, spoke, w * 1.04, 10);
+  const hub = new THREE.CylinderGeometry(
+    spoke,
+    spoke,
+    w * 1.04,
+    shapeSegments(10),
+  );
   hub.rotateX(Math.PI / 2);
 
   const group = new THREE.Group();
